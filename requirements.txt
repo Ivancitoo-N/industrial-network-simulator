@@ -1,0 +1,9 @@
+flask
+flask-socketio
+networkx
+eventlet
+pytest
+pydantic
+numpy
+reportlab
+svglib

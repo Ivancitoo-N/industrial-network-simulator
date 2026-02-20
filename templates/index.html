@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industrial Network Simulator | PROFINET • EtherCAT</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap">
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --panel: #161b22;
+            --border: #30363d;
+            --accent: #58a6ff;
+            --profinet: #ff2222;
+            --ethercat: #22ff44;
+            --modbus: #3388ff;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 320px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        /* Customize scrollbar for sidebar */
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 10px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            margin: 0 0 25px 0;
+            background: linear-gradient(90deg, #fff, var(--text-dim));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input,
+        select {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: inherit;
+            margin-bottom: 10px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+        }
+
+        button {
+            width: 100%;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* ── Main Canvas ── */
+        .main-view {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1b212c 0%, #0a0c10 100%);
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Info Panel ── */
+        .metrics-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 180px;
+            background: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border);
+            padding: 15px;
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+        }
+
+        .metric-card {
+            min-width: 220px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .metric-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .dot-online {
+            background: #22ff44;
+            box-shadow: 0 0 8px #22ff44;
+        }
+
+        .dot-offline {
+            background: #ff2222;
+            box-shadow: 0 0 8px #ff2222;
+        }
+
+        /* ── D3 Overlay ── */
+        .node circle {
+            cursor: pointer;
+            stroke-width: 2px;
+        }
+
+        .node text {
+            font-size: 10px;
+            fill: var(--text-dim);
+            pointer-events: none;
+        }
+
+        .link {
+            stroke: #444d56;
+            stroke-opacity: 0.8;
+            stroke-width: 2px;
+            transition: stroke 0.3s;
+        }
+
+        .link.inactive {
+            stroke: #ff2222;
+            stroke-dasharray: 4;
+            stroke-opacity: 1;
+        }
+
+        .traffic-particle {
+            fill: #fff;
+            filter: drop-shadow(0 0 4px #58a6ff);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <h1>NetSim Industrial</h1>
+
+        <div class="control-group">
+            <label>Añadir Dispositivo</label>
+            <input type="text" id="devId" placeholder="ID (ej: Drive_1)">
+            <select id="devType">
+                <option value="PLC">PLC S7-1500</option>
+                <option value="Drive">Servo Drive</option>
+                <option value="IO-Link">Hno IO-Link</option>
+                <option value="Switch">Switch SCALANCE</option>
+            </select>
+            <select id="devProtocol">
+                <option value="PROFINET_IRT">PROFINET IRT</option>
+                <option value="PROFINET_RT">PROFINET RT</option>
+                <option value="EtherCAT">EtherCAT</option>
+                <option value="Modbus TCP">Modbus TCP</option>
+            </select>
+            <label>Conectar a:</label>
+            <select id="devConnectTo"></select>
+            <button onclick="addDevice()">CONECTAR NODO</button>
+        </div>
+
+        <div class="control-group">
+            <label>Redundancia de Red</label>
+            <div style="display:flex; gap: 5px; margin-bottom: 5px;">
+                <select id="linkNodeU" style="flex:1;"></select>
+                <select id="linkNodeV" style="flex:1;"></select>
+            </div>
+            <button onclick="addPhysicalLink()" style="background: var(--ethercat); color: #000;">CERRAR ANILLO /
+                ENLANCE</button>
+        </div>
+
+        <hr style="border:0; border-top:1px solid var(--border); margin: 20px 0;">
+
+        <div class="control-group">
+            <label>Módulo de Resiliencia</label>
+            <div style="display:flex; gap: 5px; margin-bottom: 10px;">
+                <select id="faultDeviceSelect"
+                    style="flex:1; background: #0d1117; border: 1px solid var(--border); color: #fff; padding: 5px; border-radius: 4px;"></select>
+                <button onclick="induceTargetFailure()"
+                    style="background: var(--profinet); color: #fff; padding: 5px 10px; width: auto;">FALLO</button>
+            </div>
+            <button onclick="induceRandomFailure()"
+                style="background: #e3b341; color: #000; width: 100%; font-weight: bold; margin-bottom: 10px;">FALLO
+                ALEATORIO 🎲</button>
+            <button onclick="restoreAll()"
+                style="background: #238636; color: #fff; width: 100%; font-weight: bold; margin-bottom: 10px; font-size: 0.7rem;">RESTAURAR
+                SISTEMA ✅</button>
+            <div id="safetyAlert"
+                style="display:none; background: rgba(255,165,0,0.2); border: 1px solid orange; padding: 10px; border-radius: 6px; font-size: 0.75rem; color: orange;">
+                ⚠️ MODO DE SEGURIDAD ACTIVADO
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Exportación Profesional</label>
+            <button onclick="exportPDF()" style="background: var(--modbus); color: #fff;">DESCARGAR REPORTE
+                (PDF)</button>
+        </div>
+
+        <hr style="border:0; border-top:1px solid var(--border); margin: 20px 0;">
+
+        <div class="control-group" id="trainingPanel">
+            <label>🎓 Entrenamiento Progresivo</label>
+            <div id="tutorialLevel" style="font-weight: bold; color: var(--accent); margin-bottom: 5px;">Nivel 1:
+                Topología Estrella</div>
+            <div id="tutorialText"
+                style="font-size: 0.8rem; color: #fff; margin-bottom: 10px; background: rgba(88,166,255,0.15); padding:10px; border-radius:6px; border: 1px solid rgba(88,166,255,0.3);">
+                💡 EJERCICIO: Conecta un 'Servo_2' al Switch 'SCALANCE_1'.
+            </div>
+            <button id="nextLevelBtn" onclick="nextLevel()"
+                style="display:none; background: #238636; color: #fff; width: 100%; margin: 10px 0; padding: 10px;">SIGUIENTE
+                NIVEL ➔</button>
+            <div id="pedagogicalExplanation"
+                style="display:none; font-size: 0.7rem; color: #fff; background: rgba(35,134,54,0.1); padding: 10px; border: 1px solid #238636; border-radius: 6px; margin-bottom: 10px;">
+            </div>
+            <div id="validationStatus" style="font-size: 0.7rem; font-weight: 700;"></div>
+        </div>
+    </div>
+
+    <div class="main-view">
+        <svg id="canvas"></svg>
+
+        <div class="metrics-bar" id="metricsBar">
+            <!-- Cards injected dynamically -->
+        </div>
+    </div>
+
+    <script src="/static/visualizer.js"></script>
+    <script>
+        const socket = io();
+
+        function induceTargetFailure() {
+            const devId = document.getElementById('faultDeviceSelect').value;
+            if (devId) socket.emit('trigger_fault', { device_id: devId });
+        }
+
+        function induceRandomFailure() {
+            socket.emit('trigger_fault', { random: true });
+        }
+
+        function restoreAll() {
+            socket.emit('restore_all');
+        }
+
+        function exportPDF() {
+            window.location.href = '/api/export';
+        }
+
+        let currentLevel = 1;
+        const levels = {
+            1: {
+                title: "Nivel 1: Topología Estrella",
+                text: "💡 EJERCICIO: Conecta un 'Servo_2' al Switch 'SCALANCE_1'.",
+                explanation: "<b>Explicación:</b> Has creado una topología de estrella. Los Switches industriales como el SCALANCE gestionan el tráfico de manera eficiente, evitando colisiones y permitiendo que varios dispositivos hablen con el PLC simultáneamente.",
+                vld: (p) => p.id === 'Servo_2' && p.connect_to === 'SCALANCE_1'
+            },
+            2: {
+                title: "Nivel 2: Resiliencia de Anillo",
+                text: "💡 EJERCICIO: Conecta 'SCALANCE_1' a 'SCALANCE_2' (Nuevo Nodo), y luego usa 'Redundancia' para unir 'SCALANCE_2' con el PLC.",
+                explanation: "<b>Explicación:</b> ¡Redundancia activa! Al cerrar el anillo, si un cable se corta, los datos pueden viajar por el camino opuesto. En redes reales esto se gestiona con protocolos como PROFINET MRP para evitar bucles infinitos.",
+                vld: (p, redundant) => redundant
+            },
+            3: {
+                title: "Nivel 3: Diagnóstico de Red",
+                text: "💡 EJERCICIO: Induce un 'Fallo Aleatorio' y observa el Modo de Seguridad. Luego haz clic derecho en el nodo gris para restaurarlo.",
+                explanation: "<b>Explicación:</b> El diagnóstico en tiempo real permite a los operarios identificar fallos de hardware instantáneamente. El 'Modo de Seguridad' indica que la red sigue viva gracias a la redundancia, pero necesita mantenimiento.",
+                vld: (p) => false
+            }
+        };
+
+        function nextLevel() {
+            currentLevel++;
+            if (levels[currentLevel]) {
+                const l = levels[currentLevel];
+                document.getElementById('tutorialLevel').textContent = l.title;
+                document.getElementById('tutorialText').textContent = l.text;
+                document.getElementById('nextLevelBtn').style.display = 'none';
+                document.getElementById('pedagogicalExplanation').style.display = 'none';
+                document.getElementById('validationStatus').textContent = '';
+            } else {
+                alert("¡Felicidades! Has completado todos los niveles de entrenamiento.");
+            }
+        }
+
+        function addDevice() {
+            const payload = {
+                id: document.getElementById('devId').value,
+                type: document.getElementById('devType').value,
+                protocol: document.getElementById('devProtocol').value,
+                connect_to: document.getElementById('devConnectTo').value,
+                ip: '192.168.0.' + (Math.floor(Math.random() * 200) + 10)
+            };
+
+            const valStatus = document.getElementById('validationStatus');
+            valStatus.innerHTML = '';
+
+            fetch('/api/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(data => {
+                if (data.status === 'ok') {
+                    document.getElementById('devId').value = '';
+                    valStatus.textContent = '✅ Conexión validada.';
+                    valStatus.style.color = '#22ff44';
+
+                    if (typeof levels[currentLevel].vld === 'function' && levels[currentLevel].vld(payload, false)) {
+                        completeLevel();
+                    }
+                } else if (data.status === 'warn') {
+                    valStatus.textContent = '❌ ' + data.message;
+                    valStatus.style.color = '#ffaa00';
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
+        function addPhysicalLink() {
+            const u = document.getElementById('linkNodeU').value;
+            const v = document.getElementById('linkNodeV').value;
+            if (!u || !v || u === v) return alert("Selecciona dos nodos distintos.");
+
+            fetch('/api/link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ u, v, active: true })
+            }).then(r => r.json()).then(data => {
+                if (data.status === 'ok') {
+                    document.getElementById('validationStatus').textContent = '✅ Enlace redundante creado.';
+                    document.getElementById('validationStatus').style.color = '#22ff44';
+                }
+            });
+        }
+
+        function completeLevel() {
+            const l = levels[currentLevel];
+            document.getElementById('pedagogicalExplanation').innerHTML = l.explanation;
+            document.getElementById('pedagogicalExplanation').style.display = 'block';
+            document.getElementById('nextLevelBtn').style.display = 'block';
+        }
+
+        socket.on('fault_acknowledged', (data) => {
+            if (currentLevel === 3) {
+                completeLevel();
+            }
+        });
+
+        socket.on('network_update', (data) => {
+            updateTopology(data.topology);
+            updateMetrics(data.performance);
+            updateConnectToSelect(data.topology.nodes);
+            updateFaultSelect(data.topology.nodes);
+
+            // Check for redundant paths (Level 2 completion)
+            const anyRedundant = data.performance.some(p => p.redundant);
+            if (currentLevel === 2 && anyRedundant) {
+                completeLevel();
+            }
+
+            // Handle Safety Mode UI
+            const alert = document.getElementById('safetyAlert');
+            const modeText = document.getElementById('currentModeInfo');
+            if (modeText) {
+                if (data.safety_active) {
+                    alert.style.display = 'block';
+                    modeText.textContent = 'SEGURIDAD';
+                    modeText.style.color = 'orange';
+                } else {
+                    alert.style.display = 'none';
+                    modeText.textContent = 'NORMAL';
+                    modeText.style.color = 'var(--accent)';
+                }
+            }
+        });
+
+        function updateFaultSelect(nodes) {
+            const select = document.getElementById('faultDeviceSelect');
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = '<option value="">-- Nodo --</option>';
+            nodes.forEach(n => {
+                if (n.type !== 'PLC') {
+                    const opt = document.createElement('option');
+                    opt.value = n.id;
+                    opt.textContent = n.display_name || n.id;
+                    select.appendChild(opt);
+                }
+            });
+            select.value = current;
+        }
+
+        function updateConnectToSelect(nodes) {
+            const select = document.getElementById('devConnectTo');
+            const currentVal = select.value;
+            select.innerHTML = '';
+            nodes.forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = n.id;
+                opt.textContent = n.id;
+                select.appendChild(opt);
+            });
+            if (currentVal) select.value = currentVal;
+
+            // Sync redundancy selects
+            const uSel = document.getElementById('linkNodeU');
+            const vSel = document.getElementById('linkNodeV');
+            const uVal = uSel.value;
+            const vVal = vSel.value;
+            uSel.innerHTML = vSel.innerHTML = '<option value="">-- Nodo --</option>';
+            nodes.forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = n.id;
+                opt.textContent = n.id;
+                uSel.appendChild(opt.cloneNode(true));
+                vSel.appendChild(opt);
+            });
+            uSel.value = uVal;
+            vSel.value = vVal;
+        }
+
+        function updateMetrics(perf) {
+            const bar = document.getElementById('metricsBar');
+            bar.innerHTML = '';
+            perf.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'metric-card';
+                const isOnline = p.status === 'Online' || p.status === 'Alarm';
+                card.innerHTML = `
+                <div class="metric-header">
+                    <span class="metric-title">${p.id}</span>
+                    <div class="status-dot ${isOnline ? 'dot-online' : 'dot-offline'}"></div>
+                </div>
+                <div class="metric-value">${p.latency_ms > 0 ? p.latency_ms + ' ms' : 'N/A'}</div>
+                <div style="font-size: 0.65rem; color: var(--text-dim); margin-top:5px;">
+                    Jitter: ${p.jitter_ms}ms | Estado: ${p.status}
+                </div>
+            `;
+                bar.appendChild(card);
+            });
+        }
+    </script>
+
+</body>
+
+</html>
