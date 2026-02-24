@@ -74,6 +74,7 @@ function updateTopology(topology) {
             if (d.type === 'PLC') return "#fff";
             if (d.type === 'Drive') return "#ff2222";
             if (d.type === 'IO-Link') return "#22ff44";
+            if (d.type === 'SCADA') return "#ff9900";  // OPC-UA / SCADA gateway
             return "#58a6ff";
         })
         .style("filter", "drop-shadow(0 0 8px rgba(255,255,255,0.2))");
@@ -100,6 +101,7 @@ function updateTopology(topology) {
             if (d.type === 'PLC') return "#fff";
             if (d.type === 'Drive') return "#ff2222";
             if (d.type === 'IO-Link') return "#22ff44";
+            if (d.type === 'SCADA') return "#ff9900";  // OPC-UA / SCADA gateway
             return "#58a6ff";
         });
 

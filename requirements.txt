@@ -7,3 +7,4 @@ pydantic
 numpy
 reportlab
 svglib
+asyncua

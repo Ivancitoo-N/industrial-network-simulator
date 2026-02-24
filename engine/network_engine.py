@@ -10,12 +10,14 @@ class Protocol(str, Enum):
     PROFINET_IRT = "PROFINET_IRT"
     ETHERCAT = "EtherCAT"
     MODBUS_TCP = "Modbus TCP"
+    OPC_UA = "OPC-UA"
 
 class DeviceType(str, Enum):
     PLC = "PLC"
     DRIVE = "Drive"
     IOLINK = "IO-Link"
     SWITCH = "Switch"
+    SCADA = "SCADA"
 
 class DeviceStatus(str, Enum):
     ONLINE = "Online"
@@ -114,14 +116,16 @@ class NetworkEngine:
                     for i in range(len(path) - 1):
                         base_latency += self.graph[path[i]][path[i+1]]['weight']
                     
-                    # Protocolspecific Jitter
+                    # Protocol-specific Jitter
                     jitter = 0.0
                     if device.protocol == Protocol.PROFINET_RT:
                         jitter = random.uniform(0.01, 0.05)
                     elif device.protocol == Protocol.MODBUS_TCP:
                         jitter = random.uniform(0.1, 0.5)
                     elif device.protocol == Protocol.PROFINET_IRT or device.protocol == Protocol.ETHERCAT:
-                        jitter = random.uniform(0.001, 0.005) # Very low jitter
+                        jitter = random.uniform(0.001, 0.005)  # Very low jitter
+                    elif device.protocol == Protocol.OPC_UA:
+                        jitter = random.uniform(0.5, 5.0)  # TCP/IP pub-sub, lower priority than hard RT
 
                     total_latency = base_latency + jitter
                     

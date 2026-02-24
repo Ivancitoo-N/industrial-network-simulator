@@ -18,6 +18,7 @@
             --profinet: #ff2222;
             --ethercat: #22ff44;
             --modbus: #3388ff;
+            --opcua: #ff9900;
             --text: #e6edf3;
             --text-dim: #8b949e;
         }
@@ -237,12 +238,14 @@
                 <option value="Drive">Servo Drive</option>
                 <option value="IO-Link">Hno IO-Link</option>
                 <option value="Switch">Switch SCALANCE</option>
+                <option value="SCADA">SCADA Gateway</option>
             </select>
             <select id="devProtocol">
                 <option value="PROFINET_IRT">PROFINET IRT</option>
                 <option value="PROFINET_RT">PROFINET RT</option>
                 <option value="EtherCAT">EtherCAT</option>
                 <option value="Modbus TCP">Modbus TCP</option>
+                <option value="OPC-UA">OPC-UA</option>
             </select>
             <label>Conectar a:</label>
             <select id="devConnectTo"></select>
@@ -355,6 +358,12 @@
                 text: "💡 EJERCICIO: Induce un 'Fallo Aleatorio' y observa el Modo de Seguridad. Luego haz clic derecho en el nodo gris para restaurarlo.",
                 explanation: "<b>Explicación:</b> El diagnóstico en tiempo real permite a los operarios identificar fallos de hardware instantáneamente. El 'Modo de Seguridad' indica que la red sigue viva gracias a la redundancia, pero necesita mantenimiento.",
                 vld: (p) => false
+            },
+            4: {
+                title: "Nivel 4: OPC-UA — SCADA & Industry 4.0",
+                text: "💡 EJERCICIO: Añade un nodo 'SCADA_GW' de tipo 'SCADA Gateway' con protocolo 'OPC-UA' y conéctalo a cualquier switch o PLC.",
+                explanation: "<b>Explicación:</b> OPC-UA es el estándar de comunicación industrial de próxima generación (IEC 62541). A diferencia de PROFINET (tiempo real duro), OPC-UA opera sobre TCP/IP estándar con latencias de 0.5–5ms, ideal para supervisión SCADA, historización de datos y conectividad cloud (MES/ERP). Es la columna vertebral de Industry 4.0.",
+                vld: (p) => p.type === 'SCADA' && p.protocol === 'OPC-UA'
             }
         };
 
